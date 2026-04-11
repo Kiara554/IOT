@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart CESI — FabLab Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <span class="brand-name">Smart CESI</span>
+        <span class="brand-sub">FabLab Monitor</span>
+      </div>
+      <div class="header-right">
+        <div class="presence-badge" id="presence-badge">
+          <div class="presence-dot"></div>
+          <span id="presence-text">En attente...</span>
+        </div>
+        <div class="status-pill" id="status-pill">
+          <div class="status-dot" id="status-dot"></div>
+          <span id="status-text">Déconnecté</span>
+        </div>
+        <div class="port-label" id="port-label">—</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ALERT BANNER -->
+  <div class="alert-banner hidden" id="alert-banner">
+    <div class="alert-inner">
+      <span class="alert-icon">⚠</span>
+      <div id="alert-messages"></div>
+      <button class="alert-close" id="alert-close">✕</button>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- STAT ROW -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Messages reçus</div>
+        <div class="stat-value" id="total-received">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Erreurs</div>
+        <div class="stat-value danger" id="total-errors">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Dernière mise à jour</div>
+        <div class="stat-value small" id="last-update">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Séquence</div>
+        <div class="stat-value" id="seq-value">—</div>
+      </div>
+    </div>
+
+    <!-- SENSOR CARDS -->
+    <div class="cards-grid">
+
+      <div class="sensor-card" id="card-temp">
+        <div class="sensor-header">
+          <div class="sensor-icon temp-icon">T</div>
+          <div>
+            <div class="sensor-title">Température</div>
+            <div class="sensor-unit">°C</div>
+          </div>
+          <div class="sensor-status" id="temp-status"></div>
+        </div>
+        <div class="sensor-value" id="temp-value">—</div>
+        <div class="sensor-bar">
+          <div class="sensor-bar-fill temp-bar" id="temp-bar" style="width:0%"></div>
+        </div>
+        <div class="sensor-range">Seuil : <span id="temp-range">20°C – 26°C</span></div>
+      </div>
+
+      <div class="sensor-card" id="card-hum">
+        <div class="sensor-header">
+          <div class="sensor-icon hum-icon">H</div>
+          <div>
+            <div class="sensor-title">Humidité</div>
+            <div class="sensor-unit">%</div>
+          </div>
+          <div class="sensor-status" id="hum-status"></div>
+        </div>
+        <div class="sensor-value" id="hum-value">—</div>
+        <div class="sensor-bar">
+          <div class="sensor-bar-fill hum-bar" id="hum-bar" style="width:0%"></div>
+        </div>
+        <div class="sensor-range">Seuil : <span id="hum-range">30% – 60%</span></div>
+      </div>
+
+      <div class="sensor-card" id="card-pres">
+        <div class="sensor-header">
+          <div class="sensor-icon pres-icon">P</div>
+          <div>
+            <div class="sensor-title">Pression</div>
+            <div class="sensor-unit">hPa</div>
+          </div>
+          <div class="sensor-status" id="pres-status"></div>
+        </div>
+        <div class="sensor-value" id="pres-value">—</div>
+        <div class="sensor-bar">
+          <div class="sensor-bar-fill pres-bar" id="pres-bar" style="width:0%"></div>
+        </div>
+        <div class="sensor-range">Seuil : <span id="pres-range">980 – 1030 hPa</span></div>
+      </div>
+
+      <div class="sensor-card" id="card-gaz">
+        <div class="sensor-header">
+          <div class="sensor-icon gaz-icon">G</div>
+          <div>
+            <div class="sensor-title">Qualité air</div>
+            <div class="sensor-unit">ADC</div>
+          </div>
+          <div class="sensor-status" id="gaz-status"></div>
+        </div>
+        <div class="sensor-value" id="gaz-value">—</div>
+        <div class="sensor-bar">
+          <div class="sensor-bar-fill gaz-bar" id="gaz-bar" style="width:0%"></div>
+        </div>
+        <div class="sensor-range">Seuil max : <span id="gaz-range">800 ADC</span></div>
+      </div>
+
+      <div class="sensor-card presence-card" id="card-presence">
+        <div class="sensor-header">
+          <div class="sensor-icon pir-icon">PIR</div>
+          <div>
+            <div class="sensor-title">Présence</div>
+            <div class="sensor-unit">FabLab</div>
+          </div>
+        </div>
+        <div class="presence-display">
+          <div class="presence-circle" id="presence-circle">
+            <div class="presence-label" id="presence-label">—</div>
+          </div>
+          <div class="presence-info">
+            <div class="presence-since">Dernière détection</div>
+            <div class="presence-time" id="presence-time">—</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- CHARTS -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Température</span>
+          <span class="chart-subtitle">60 dernières mesures</span>
+        </div>
+        <canvas id="tempChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Humidité</span>
+          <span class="chart-subtitle">60 dernières mesures</span>
+        </div>
+        <canvas id="humChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Qualité de l'air</span>
+          <span class="chart-subtitle">60 dernières mesures</span>
+        </div>
+        <canvas id="gazChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Pression</span>
+          <span class="chart-subtitle">60 dernières mesures</span>
+        </div>
+        <canvas id="presChart"></canvas>
+      </div>
+    </div>
+
+    <!-- SETTINGS & LOGS -->
+    <div class="bottom-row">
+      <div class="settings-card">
+        <div class="card-title">Seuils d'alerte</div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Temp min (°C)</label>
+            <input type="number" id="s-temp-min" value="20" step="0.5">
+          </div>
+          <div class="setting-item">
+            <label>Temp max (°C)</label>
+            <input type="number" id="s-temp-max" value="26" step="0.5">
+          </div>
+          <div class="setting-item">
+            <label>Humidité min (%)</label>
+            <input type="number" id="s-hum-min" value="30" step="1">
+          </div>
+          <div class="setting-item">
+            <label>Humidité max (%)</label>
+            <input type="number" id="s-hum-max" value="60" step="1">
+          </div>
+          <div class="setting-item">
+            <label>Gaz max (ADC)</label>
+            <input type="number" id="s-gaz-max" value="800" step="10">
+          </div>
+          <div class="setting-item">
+            <label>Pression min (hPa)</label>
+            <input type="number" id="s-pres-min" value="980" step="1">
+          </div>
+          <div class="setting-item">
+            <label>Pression max (hPa)</label>
+            <input type="number" id="s-pres-max" value="1030" step="1">
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn-apply" id="btn-apply">Appliquer</button>
+          <button class="btn-export" id="btn-export">Exporter CSV</button>
+        </div>
+        <div class="settings-success hidden" id="settings-success">✓ Seuils mis à jour</div>
+      </div>
+
+      <div class="log-card">
+        <div class="card-title">Dernière trame reçue</div>
+        <pre id="last-json">En attente de données...</pre>
+        <div class="card-title" style="margin-top:16px">Logs temps réel</div>
+        <div class="log-container" id="log-container"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <span>Smart CESI — Projet IoT FISA 2026</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

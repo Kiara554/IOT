@@ -1,0 +1,20 @@
+code émetteur : carte avec les composants
+code recepteur : carte qui recoit le message lora de la carte émettrice et qui envoie en wifi au dashboard
+
+
+smart Dashboard : le Dashboard, besoin de le npm start en local
+
+
+
+
+
+sur VS code 
+- ouvrir platformIO CLI
+- aller dans le dossier code recepteur avec cd
+
+pio run --target upload 
+-> envoyer sur la carte
+
+
+pio device monitor
+-> voir le monitor de la carte pour voir ce qu'elle dit (vérif si ça marche)

@@ -1,0 +1,4 @@
+node_modules/
+smart-cesi-dashboard/logs/
+.pio/
+EOF
