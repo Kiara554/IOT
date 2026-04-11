@@ -305,15 +305,15 @@ main {
 }
 .card-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; }
 
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-.setting-item { display: flex; flex-direction: column; gap: 4px; }
-.setting-item label { font-size: 11px; color: var(--text-3); }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 12px; }
+.setting-item { display: flex; flex-direction: column; gap: 3px; }
+.setting-item label { font-size: 10px; color: var(--text-3); }
 .setting-item input {
-  padding: 7px 10px;
+  padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-family: 'DM Mono', monospace;
-  font-size: 13px;
+  font-size: 12px;
   background: var(--bg);
   color: var(--text);
   outline: none;
