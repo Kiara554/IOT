@@ -4,13 +4,7 @@
 #include <SSD1306Wire.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-
-// ============================================================
-// CONFIGURATION WiFi
-// ============================================================
-const char* WIFI_SSID     = "devolo-269";
-const char* WIFI_PASSWORD = "HLGTFVQRUHDAGVVS";
-const char* SERVER_URL    = "http://192.168.1.49:3000/api/data";
+#include "../config.h"
 
 // ============================================================
 // PINS Heltec WiFi LoRa 32 V3 — SX1262

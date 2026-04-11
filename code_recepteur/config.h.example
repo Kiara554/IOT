@@ -1,0 +1,6 @@
+// Copie ce fichier en "config.h" et remplis tes informations
+#pragma once
+
+#define WIFI_SSID      "TON_SSID"
+#define WIFI_PASSWORD  "TON_MOT_DE_PASSE"
+#define SERVER_URL     "http://192.168.1.XX:3000/api/data"

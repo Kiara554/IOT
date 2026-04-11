@@ -125,15 +125,23 @@ projet/
 ### 2. Configurer et flasher le récepteur (PlatformIO)
 
 1. Ouvre le dossier `code_recepteur/` dans VSCode
-2. Modifie les lignes suivantes dans `src/main.cpp` :
+2. Copie le fichier de configuration et remplis tes informations :
+
+```bash
+cp code_recepteur/config.h.example code_recepteur/config.h
+```
+
+Edite `code_recepteur/config.h` :
 
 ```cpp
-const char* WIFI_SSID     = "TON_SSID";           // Nom de ton réseau WiFi
-const char* WIFI_PASSWORD = "TON_MOT_DE_PASSE";   // Mot de passe WiFi
-const char* SERVER_URL    = "http://192.168.1.XX:3000/api/data"; // IP de ton PC
+#define WIFI_SSID      "TON_SSID"
+#define WIFI_PASSWORD  "TON_MOT_DE_PASSE"
+#define SERVER_URL     "http://192.168.1.XX:3000/api/data"
 ```
 
 Pour trouver l'IP de ton PC : lance `ipconfig` dans le terminal et cherche **"Carte réseau sans fil Wi-Fi" → "Adresse IPv4"**.
+
+> `config.h` est ignoré par git — tes identifiants WiFi ne seront jamais publiés.
 
 3. Dans le terminal VSCode (ouvrir le **PlatformIO CLI**) :
 ```bash
