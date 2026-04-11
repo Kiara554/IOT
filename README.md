@@ -20,12 +20,12 @@ Les données sont transmises sans fil par **LoRa 868 MHz**, reçues par une seco
 ```
 ┌─────────────────────┐        LoRa 868 MHz        ┌──────────────────────┐
 │   Heltec LoRa V3    │ ─────────────────────────► │   Heltec LoRa V3     │
-│      ÉMETTEUR       │                             │      RÉCEPTEUR       │
-│                     │                             │                      │
-│  BME280 (T/H/P)     │                             │  Affichage OLED      │
-│  MQ-135 (air)       │                             │  WiFi HTTP POST      │
-│  PIR (présence)     │                             └──────────┬───────────┘
-└─────────────────────┘                                        │
+│      ÉMETTEUR       │                            │      RÉCEPTEUR       │
+│                     │                            │                      │
+│  BME280 (T/H/P)     │                            │  Affichage OLED      │
+│  MQ-135 (air)       │                            │  WiFi HTTP POST      │
+│  PIR (présence)     │                            └──────────┬───────────┘
+└─────────────────────┘                                       │
                                                                │ HTTP POST /api/data
                                                                ▼
                                                    ┌──────────────────────┐
