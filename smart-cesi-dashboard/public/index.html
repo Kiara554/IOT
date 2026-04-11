@@ -50,8 +50,8 @@
         <div class="stat-label">Messages reçus</div>
         <div class="stat-value" id="total-received">0</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Erreurs</div>
+      <div class="stat-card stat-card-clickable" id="card-errors" title="Cliquer pour voir le détail">
+        <div class="stat-label">Alertes <span class="stat-hint">↗</span></div>
         <div class="stat-value danger" id="total-errors">0</div>
       </div>
       <div class="stat-card">
@@ -238,6 +238,22 @@
   <footer>
     <span>Smart CESI — Projet IoT FISA 2026</span>
   </footer>
+
+  <!-- MODAL ALERTES -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Historique des alertes</span>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <p class="modal-empty">Aucune alerte enregistrée.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-export" id="btn-clear-alerts">Effacer l'historique</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

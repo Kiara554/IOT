@@ -12,6 +12,7 @@ let stats = { received: 0, errors: 0 };
 let dataHistory = [];
 let lastPresenceTime = null;
 let seqCounter = 0;
+let alertHistory = [];  // { id, msg, time, status: 'active'|'resolved' }
 
 // ============================================================
 // WEBSOCKET
@@ -194,10 +195,30 @@ function checkAlerts(data) {
 
   const banner = document.getElementById('alert-banner');
   const msgs   = document.getElementById('alert-messages');
+
   if (alerts.length > 0) {
     msgs.innerHTML = alerts.map(a => `<div>${a}</div>`).join('');
     banner.classList.remove('hidden');
     addLog('⚠ ' + alerts.join(' | '), 'warn');
+
+    // Ajoute dans l'historique (évite les doublons actifs)
+    alerts.forEach(msg => {
+      const existing = alertHistory.find(a => a.msg === msg && a.status === 'active');
+      if (!existing) {
+        alertHistory.unshift({ id: Date.now() + Math.random(), msg, time: new Date(), status: 'active' });
+      }
+    });
+    document.getElementById('total-errors').textContent = alertHistory.filter(a => a.status === 'active').length;
+
+  } else {
+    // Résout toutes les alertes actives
+    let resolved = false;
+    alertHistory.forEach(a => {
+      if (a.status === 'active') { a.status = 'resolved'; a.resolvedTime = new Date(); resolved = true; }
+    });
+    if (resolved) {
+      document.getElementById('total-errors').textContent = alertHistory.filter(a => a.status === 'active').length;
+    }
   }
 }
 
@@ -316,6 +337,51 @@ function addLog(msg, type = '') {
   container.prepend(entry);
   while (container.children.length > 50) container.removeChild(container.lastChild);
 }
+
+// ============================================================
+// MODAL ALERTES
+// ============================================================
+function renderModal() {
+  const body = document.getElementById('modal-body');
+  if (alertHistory.length === 0) {
+    body.innerHTML = '<p class="modal-empty">Aucune alerte enregistrée.</p>';
+    return;
+  }
+  body.innerHTML = alertHistory.map(a => `
+    <div class="alert-entry ${a.status}">
+      <div class="alert-entry-dot"></div>
+      <div class="alert-entry-content">
+        <div class="alert-entry-msg">${a.msg}</div>
+        <div class="alert-entry-meta">
+          Déclenché : ${a.time.toLocaleTimeString('fr-FR')}
+          ${a.resolvedTime ? ' — Résolu : ' + a.resolvedTime.toLocaleTimeString('fr-FR') : ''}
+        </div>
+      </div>
+      <span class="alert-entry-badge">${a.status === 'active' ? 'Actif' : 'Résolu'}</span>
+    </div>
+  `).join('');
+}
+
+document.getElementById('card-errors').addEventListener('click', () => {
+  renderModal();
+  document.getElementById('modal-overlay').classList.remove('hidden');
+});
+
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('modal-overlay').classList.add('hidden');
+});
+
+document.getElementById('modal-overlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.add('hidden');
+  }
+});
+
+document.getElementById('btn-clear-alerts').addEventListener('click', () => {
+  alertHistory = [];
+  document.getElementById('total-errors').textContent = 0;
+  renderModal();
+});
 
 // ============================================================
 // START
