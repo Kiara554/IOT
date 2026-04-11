@@ -89,6 +89,19 @@ const clients = new Set();
 let dataHistory = [];
 let stats = { totalReceived: 0, totalErrors: 0, lastUpdate: null };
 let isConnected = false;
+let lastDataTime = null;
+
+// Vérifie toutes les 5s si la carte est toujours active (timeout 15s)
+setInterval(() => {
+  if (lastDataTime && isConnected) {
+    const secondsSinceLastData = (Date.now() - lastDataTime) / 1000;
+    if (secondsSinceLastData > 15) {
+      isConnected = false;
+      broadcast({ type: 'status', connected: false, port: 'WiFi', stats });
+      console.log('Carte déconnectée — aucune donnée depuis', Math.round(secondsSinceLastData), 'secondes');
+    }
+  }
+}, 5000);
 
 wss.on('connection', ws => {
   clients.add(ws);
@@ -155,6 +168,7 @@ app.post('/api/data', (req, res) => {
   stats.totalReceived++;
   stats.lastUpdate = new Date().toISOString();
   isConnected = true;
+  lastDataTime = Date.now();
 
   dataHistory.push(data);
   if (dataHistory.length > CONFIG.historySize) dataHistory.shift();
@@ -174,7 +188,7 @@ server.listen(CONFIG.webPort, () => {
   console.log('\n╔════════════════════════════════════╗');
   console.log('║     Smart CESI — FabLab Monitor    ║');
   console.log('╚════════════════════════════════════╝\n');
-  console.log(`🌍 Dashboard : http://localhost:${CONFIG.webPort}`);
-  console.log(`📡 Réception : WiFi HTTP POST → /api/data`);
-  console.log(`📝 Logs CSV  : ${LOGS_DIR}\n`);
+  console.log(`Dashboard : http://localhost:${CONFIG.webPort}`);
+  console.log(`Réception : WiFi HTTP POST → /api/data`);
+  console.log(`Logs CSV  : ${LOGS_DIR}\n`);
 });
