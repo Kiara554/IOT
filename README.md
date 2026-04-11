@@ -135,10 +135,22 @@ const char* SERVER_URL    = "http://192.168.1.XX:3000/api/data"; // IP de ton PC
 
 Pour trouver l'IP de ton PC : lance `ipconfig` dans le terminal et cherche **"Carte réseau sans fil Wi-Fi" → "Adresse IPv4"**.
 
-3. Dans le terminal VSCode :
+3. Dans le terminal VSCode (ouvrir le **PlatformIO CLI**) :
 ```bash
 cd code_recepteur
 pio run --target upload
+```
+
+4. Pour vérifier que la carte fonctionne, ouvre le moniteur série :
+```bash
+pio device monitor
+```
+Tu devrais voir :
+```
+WiFi connecté — IP: 192.168.1.XX
+Initialisation LoRa... OK
+RECU: T:21.5,H:48.2,... | RSSI: -43 dBm
+HTTP POST OK: 200
 ```
 
 ---
