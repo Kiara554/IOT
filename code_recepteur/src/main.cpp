@@ -4,6 +4,7 @@
 #include <SSD1306Wire.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include "mbedtls/aes.h"
 #include "../config.h"
 
 // ============================================================
@@ -42,6 +43,108 @@ void IRAM_ATTR setFlag() {
 }
 
 // ============================================================
+// AES-128-CBC — déchiffrement
+// Clé et IV partagés avec l'émetteur (définis dans config.h)
+// ============================================================
+static const uint8_t aes_key[16] = AES_KEY_BYTES;
+static const uint8_t aes_iv[16]  = AES_IV_BYTES;
+
+static uint8_t hexNibble(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return 0;
+}
+
+// Reçoit une String de caractères hex (ex: "a3f5b2c1...")
+// Retourne le texte clair dans `plain`, ou false si échec.
+bool decryptAES128(const String& hexCipher, String& plain) {
+  const size_t hexLen = hexCipher.length();
+  // Doit être un multiple de 32 (= blocs de 16 octets encodés en hex)
+  if (hexLen == 0 || hexLen % 32 != 0) return false;
+
+  // Vérification rapide : tous les caractères doivent être hex
+  for (size_t i = 0; i < hexLen; i++) {
+    char c = hexCipher[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+      return false;
+  }
+
+  const size_t cipherLen = hexLen / 2;
+  uint8_t* cipher = (uint8_t*)malloc(cipherLen);
+  uint8_t* output = (uint8_t*)malloc(cipherLen + 1);
+  if (!cipher || !output) { free(cipher); free(output); return false; }
+
+  // Décodage hex → octets
+  for (size_t i = 0; i < cipherLen; i++) {
+    cipher[i] = (hexNibble(hexCipher[i * 2]) << 4) | hexNibble(hexCipher[i * 2 + 1]);
+  }
+
+  // Déchiffrement AES-128-CBC
+  uint8_t iv[16];
+  memcpy(iv, aes_iv, 16);  // l'IV est modifié lors du déchiffrement, on travaille sur une copie
+
+  mbedtls_aes_context ctx;
+  mbedtls_aes_init(&ctx);
+  mbedtls_aes_setkey_dec(&ctx, aes_key, 128);
+  int ret = mbedtls_aes_crypt_cbc(&ctx, MBEDTLS_AES_DECRYPT, cipherLen, iv, cipher, output);
+  mbedtls_aes_free(&ctx);
+  free(cipher);
+
+  if (ret != 0) { free(output); return false; }
+
+  // Suppression du padding PKCS7
+  const uint8_t padVal = output[cipherLen - 1];
+  if (padVal == 0 || padVal > 16) { free(output); return false; }
+  const size_t plainLen = cipherLen - padVal;
+  output[plainLen] = '\0';
+
+  plain = String((char*)output);
+  free(output);
+  return true;
+}
+
+// ============================================================
+// BUFFER CIRCULAIRE — stockage local si WiFi indisponible
+// ============================================================
+#define FRAME_BUF_SIZE 20
+
+struct FrameEntry {
+  String payload;
+  int    rssi;
+};
+
+static FrameEntry frameBuf[FRAME_BUF_SIZE];
+static int  bufHead  = 0;   // indice de la trame la plus ancienne
+static int  bufTail  = 0;   // prochain emplacement d'écriture
+static int  bufCount = 0;   // nombre de trames stockées
+
+static void bufferFrame(const String& payload, int rssi) {
+  frameBuf[bufTail] = {payload, rssi};
+  bufTail = (bufTail + 1) % FRAME_BUF_SIZE;
+  if (bufCount < FRAME_BUF_SIZE) {
+    bufCount++;
+  } else {
+    // Buffer plein : on écrase la plus ancienne trame
+    bufHead = (bufHead + 1) % FRAME_BUF_SIZE;
+  }
+}
+
+static bool dequeueFrame(String& payload, int& rssi) {
+  if (bufCount == 0) return false;
+  payload = frameBuf[bufHead].payload;
+  rssi    = frameBuf[bufHead].rssi;
+  bufHead = (bufHead + 1) % FRAME_BUF_SIZE;
+  bufCount--;
+  return true;
+}
+
+// ============================================================
+// NUMÉRO DE SÉQUENCE
+// ============================================================
+static uint32_t seqNum = 0;
+
+// ============================================================
 // WiFi
 // ============================================================
 void connectWiFi() {
@@ -60,22 +163,66 @@ void connectWiFi() {
   }
 }
 
-void sendToServer(const String& payload, int rssi) {
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
-    return;
-  }
+// Effectue le POST HTTP. Retourne true si succès (2xx).
+static bool httpPost(const String& payload, int rssi) {
   HTTPClient http;
   http.begin(SERVER_URL);
   http.addHeader("Content-Type", "application/json");
-  String body = "{\"payload\":\"" + payload + "\",\"rssi\":" + rssi + "}";
+  http.addHeader("X-Auth-Token", AUTH_TOKEN);
+
+  String body = "{\"payload\":\"" + payload + "\",\"rssi\":" + rssi
+              + ",\"seq\":" + seqNum + "}";
+  seqNum++;
+
   int code = http.POST(body);
-  if (code > 0) {
-    Serial.printf("HTTP POST OK: %d\n", code);
-  } else {
-    Serial.printf("HTTP POST erreur: %s\n", http.errorToString(code).c_str());
-  }
   http.end();
+
+  if (code > 0 && code < 300) {
+    Serial.printf("HTTP POST OK: %d\n", code);
+    return true;
+  }
+  Serial.printf("HTTP POST erreur: %s (code %d)\n",
+                http.errorToString(code).c_str(), code);
+  return false;
+}
+
+// Vide le buffer en envoyant les trames en attente.
+static void flushBuffer() {
+  if (bufCount == 0) return;
+  Serial.printf("WiFi rétabli — vidage de %d trame(s) en attente\n", bufCount);
+  String p; int r;
+  while (bufCount > 0 && WiFi.status() == WL_CONNECTED) {
+    if (!dequeueFrame(p, r)) break;
+    if (!httpPost(p, r)) {
+      // En cas d'échec pendant le vidage, on rebufferise et on arrête
+      bufferFrame(p, r);
+      Serial.println("Echec vidage — arrêt, trames restantes conservées");
+      break;
+    }
+  }
+}
+
+void sendToServer(const String& payload, int rssi) {
+  // Tentative de reconnexion si nécessaire
+  if (WiFi.status() != WL_CONNECTED) {
+    connectWiFi();
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    // Toujours hors ligne : on bufferise
+    bufferFrame(payload, rssi);
+    Serial.printf("WiFi KO — trame bufferisée (%d/%d)\n", bufCount, FRAME_BUF_SIZE);
+    return;
+  }
+
+  // WiFi dispo : vider le buffer d'abord
+  if (bufCount > 0) flushBuffer();
+
+  // Envoyer la trame courante
+  if (!httpPost(payload, rssi)) {
+    bufferFrame(payload, rssi);
+    Serial.printf("POST échoué — trame bufferisée (%d/%d)\n", bufCount, FRAME_BUF_SIZE);
+  }
 }
 
 // ============================================================
@@ -142,21 +289,35 @@ void loop() {
 
   if (state == RADIOLIB_ERR_NONE) {
     int rssi = (int)radio.getRSSI();
-    Serial.printf("RECU: %s | RSSI: %d dBm\n", rxData.c_str(), rssi);
+    Serial.printf("RECU (chiffré): %s | RSSI: %d dBm\n", rxData.c_str(), rssi);
 
-    // OLED — mise à jour immédiate avant tout traitement long
+    // Déchiffrement AES-128-CBC
+    String plaintext;
+    if (!decryptAES128(rxData, plaintext)) {
+      Serial.println("ERREUR: déchiffrement AES échoué — trame ignorée");
+      display.clear();
+      display.drawString(0, 0, "Erreur AES");
+      display.drawString(0, 20, rxData.substring(0, 20));
+      display.display();
+      radio.startReceive();
+      return;
+    }
+    Serial.printf("DECHIFFRE: %s\n", plaintext.c_str());
+
+    // OLED — mise à jour avant traitement long
     display.clear();
     display.setFont(ArialMT_Plain_10);
     display.drawString(0, 0, "Donnees Recues:");
-    display.drawString(0, 20, rxData);
+    display.drawString(0, 20, plaintext.substring(0, 24));
     display.drawString(0, 45, "Signal: " + String(rssi) + " dBm");
     display.display();
 
-    // Remettre le LoRa en écoute AVANT le HTTP POST (bloquant)
+    // Remettre LoRa en écoute AVANT le HTTP POST (bloquant)
     radio.startReceive();
 
-    // Envoi WiFi (peut prendre ~500ms, LoRa écoute déjà)
-    sendToServer(rxData, rssi);
+    // Envoi WiFi
+    sendToServer(plaintext, rssi);
+
   } else {
     Serial.printf("Erreur reception: %d\n", state);
     radio.startReceive();

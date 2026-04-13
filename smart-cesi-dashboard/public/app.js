@@ -1,18 +1,28 @@
 // ============================================================
 // CONFIGURATION
 // ============================================================
-let thresholds = {
+const THRESHOLDS_DEFAULT = {
   temp:    { min: 20,  max: 26   },
   hum:     { min: 30,  max: 60   },
   gaz:     { max: 800            },
   pression:{ min: 980, max: 1030 }
 };
 
+let thresholds = (() => {
+  try {
+    const saved = localStorage.getItem('smartcesi_thresholds');
+    return saved ? JSON.parse(saved) : THRESHOLDS_DEFAULT;
+  } catch(e) {
+    return THRESHOLDS_DEFAULT;
+  }
+})();
+
 let stats = { received: 0, errors: 0 };
 let dataHistory = [];
 let lastPresenceTime = null;
 let seqCounter = 0;
 let alertHistory = [];  // { id, msg, time, status: 'active'|'resolved' }
+let presenceDetectedCount = 0;
 
 // ============================================================
 // WEBSOCKET
@@ -159,14 +169,21 @@ function updatePresence(val) {
   const btext   = document.getElementById('presence-text');
   const timeEl  = document.getElementById('presence-time');
 
-  const occupied = val === 1 || val === true;
+  if (val === 1) {
+    presenceDetectedCount = 0;
+  } else {
+    presenceDetectedCount++;
+  }
+
+  // On considère "vide" seulement après 2 cycles consécutifs sans détection
+  const occupied = val === 1 || presenceDetectedCount < 2;
 
   circle.className = 'presence-circle ' + (occupied ? 'occupied' : 'empty');
   label.textContent = occupied ? 'Occupé' : 'Vide';
   badge.className   = 'presence-badge ' + (occupied ? 'occupied' : 'empty');
   btext.textContent = occupied ? 'FabLab occupé' : 'FabLab vide';
 
-  if (occupied) {
+  if (val === 1) {
     lastPresenceTime = new Date();
     timeEl.textContent = lastPresenceTime.toLocaleTimeString('fr-FR');
   }
@@ -218,6 +235,8 @@ function checkAlerts(data) {
     });
     if (resolved) {
       document.getElementById('total-errors').textContent = alertHistory.filter(a => a.status === 'active').length;
+      banner.classList.add('hidden');
+      addLog('Toutes les alertes résolues', 'ok');
     }
   }
 }
@@ -303,10 +322,12 @@ document.getElementById('btn-apply').addEventListener('click', () => {
   ok.classList.remove('hidden');
   setTimeout(() => ok.classList.add('hidden'), 2000);
 
+  localStorage.setItem('smartcesi_thresholds', JSON.stringify(thresholds));
+
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'update_thresholds', thresholds }));
   }
-  addLog('Seuils mis à jour', 'ok');
+  addLog('Seuils mis à jour et sauvegardés', 'ok');
 });
 
 // ============================================================
@@ -384,7 +405,20 @@ document.getElementById('btn-clear-alerts').addEventListener('click', () => {
 });
 
 // ============================================================
-// START
+// START — restaure les seuils dans le formulaire au chargement
 // ============================================================
+document.getElementById('s-temp-min').value = thresholds.temp.min;
+document.getElementById('s-temp-max').value = thresholds.temp.max;
+document.getElementById('s-hum-min').value  = thresholds.hum.min;
+document.getElementById('s-hum-max').value  = thresholds.hum.max;
+document.getElementById('s-gaz-max').value  = thresholds.gaz.max;
+document.getElementById('s-pres-min').value = thresholds.pression.min;
+document.getElementById('s-pres-max').value = thresholds.pression.max;
+
+document.getElementById('temp-range').textContent = `${thresholds.temp.min}°C – ${thresholds.temp.max}°C`;
+document.getElementById('hum-range').textContent  = `${thresholds.hum.min}% – ${thresholds.hum.max}%`;
+document.getElementById('gaz-range').textContent  = `${thresholds.gaz.max} ADC`;
+document.getElementById('pres-range').textContent = `${thresholds.pression.min} – ${thresholds.pression.max} hPa`;
+
 connectWS();
 addLog('Dashboard Smart CESI démarré', 'ok');

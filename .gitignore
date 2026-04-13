@@ -28,3 +28,9 @@ code_recepteur/code_recepteur_original.ino
 # Configuration locale (contient les identifiants WiFi)
 code_recepteur/config.h
 upload code.txt
+
+
+# Livrables (Word, PDF)
+*.docx
+*.pdf
+
