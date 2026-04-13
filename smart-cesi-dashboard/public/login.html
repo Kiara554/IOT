@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart CESI — Connexion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f7f7f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-card {
+      background: #fff;
+      border: 1px solid #e8e8e4;
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.06);
+    }
+    .login-logo {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: #9b9b93;
+      margin-bottom: 8px;
+    }
+    .login-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1a1a18;
+      margin-bottom: 28px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #5a5a54;
+      margin-bottom: 6px;
+    }
+    input[type="password"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #e8e8e4;
+      border-radius: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      background: #f7f7f5;
+      color: #1a1a18;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: 20px;
+    }
+    input[type="password"]:focus { border-color: #3a8fd4; background: #fff; }
+    button {
+      width: 100%;
+      padding: 11px;
+      background: #1a1a18;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    button:hover { background: #3a3a36; }
+    .error {
+      background: #fdf0ee;
+      border: 1px solid #f5c6c0;
+      color: #c0392b;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-logo">Smart CESI — FabLab Monitor</div>
+    <div class="login-title">Connexion</div>
+    <div id="error-msg" class="error" style="display:none">Mot de passe incorrect.</div>
+    <form method="POST" action="/login">
+      <label for="password">Mot de passe</label>
+      <input type="password" id="password" name="password" placeholder="••••••••••" autofocus>
+      <button type="submit">Accéder au dashboard</button>
+    </form>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    if (params.get('error')) document.getElementById('error-msg').style.display = 'block';
+  </script>
+</body>
+</html>

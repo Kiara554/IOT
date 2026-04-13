@@ -1,6 +1,7 @@
 require('dotenv').config();
 const ngrok      = require('@ngrok/ngrok');
 const express    = require('express');
+const session    = require('express-session');
 const WebSocket  = require('ws');
 const path       = require('path');
 const fs         = require('fs');
@@ -15,7 +16,8 @@ const CONFIG = {
 };
 
 // Token partagé avec le récepteur LoRa (doit correspondre à AUTH_TOKEN dans config.h)
-const AUTH_TOKEN = process.env.AUTH_TOKEN || 'SmartCESI-Secret-2026';
+const AUTH_TOKEN        = process.env.AUTH_TOKEN        || 'SmartCESI-Secret-2026';
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'smartcesi2026';
 
 // ============================================================
 // MIDDLEWARE — vérification du token sur POST /api/data
@@ -145,64 +147,43 @@ const app    = express();
 const server = require('http').createServer(app);
 const wss    = new WebSocket.Server({ server });
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
-
-const clients = new Set();
-let dataHistory = [];
-let stats = { totalReceived: 0, totalErrors: 0, lastUpdate: null };
-let isConnected = false;
-let lastDataTime = null;
-
-// Vérifie toutes les 5s si la carte est toujours active (timeout 15s)
-setInterval(() => {
-  if (lastDataTime && isConnected) {
-    const secondsSinceLastData = (Date.now() - lastDataTime) / 1000;
-    if (secondsSinceLastData > 15) {
-      isConnected = false;
-      broadcast({ type: 'status', connected: false, port: 'WiFi', stats });
-      console.log('Carte déconnectée — aucune donnée depuis', Math.round(secondsSinceLastData), 'secondes');
-    }
-  }
-}, 5000);
-
-wss.on('connection', ws => {
-  clients.add(ws);
-  console.log('Client WebSocket connecté');
-
-  ws.send(JSON.stringify({ type: 'status', connected: isConnected, port: 'WiFi', stats }));
-  ws.send(JSON.stringify({ type: 'history', data: dataHistory }));
-
-  ws.on('message', msg => {
-    try {
-      const data = JSON.parse(msg);
-      if (data.type === 'update_thresholds') {
-        console.log('Seuils mis à jour:', data.thresholds);
-      }
-    } catch(e) {}
-  });
-
-  ws.on('close', () => clients.delete(ws));
-  ws.on('error', () => clients.delete(ws));
+// Session
+const sessionMiddleware = session({
+  secret: process.env.SESSION_SECRET || 'smartcesi-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 8 * 60 * 60 * 1000 } // 8h
 });
+app.use(sessionMiddleware);
 
-function broadcast(obj) {
-  const msg = JSON.stringify(obj);
-  for (const c of clients) {
-    if (c.readyState === WebSocket.OPEN) c.send(msg);
-  }
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+// ============================================================
+// AUTHENTIFICATION DASHBOARD
+// ============================================================
+function requireAuth(req, res, next) {
+  if (req.session && req.session.authenticated) return next();
+  res.redirect('/login');
 }
 
-// ============================================================
-// ROUTES
-// ============================================================
-app.get('/api/status', (req, res) => res.json({ connected: isConnected, stats }));
-app.get('/api/history', (req, res) => res.json(dataHistory));
+// Routes publiques (pas de requireAuth)
+app.get('/login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 
-// Registre chainé — lecture publique (lecture seule)
-app.get('/api/chain', (req, res) => res.json(chain));
+app.post('/login', (req, res) => {
+  if (req.body.password === DASHBOARD_PASSWORD) {
+    req.session.authenticated = true;
+    res.redirect('/');
+  } else {
+    res.redirect('/login?error=1');
+  }
+});
 
-// Réception des données du récepteur LoRa — protégé par token
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => res.redirect('/login'));
+});
+
+// Route ESP32 — avant les fichiers statiques pour ne pas être interceptée par requireAuth
 app.post('/api/data', checkAuthToken, (req, res) => {
   const body = req.body;
 
@@ -222,15 +203,12 @@ app.post('/api/data', checkAuthToken, (req, res) => {
   if (body.rssi       !== undefined) data.rssi       = body.rssi;
   if (body.hmac_valid !== undefined) data.hmac_valid = body.hmac_valid;
 
-  // Numéro de séquence — priorité au champ S: parsé depuis la trame LoRa (émetteur)
-  // body.seq est conservé en fallback si l'émetteur ne l'inclut pas encore
   const seqVal = data.seq ?? (body.seq !== undefined ? Number(body.seq) : undefined);
   if (seqVal !== undefined) {
     checkSeq(seqVal);
     data.seq = seqVal;
   }
 
-  // Registre chainé
   const block = addBlock(data);
   console.log(`[CHAIN] Bloc #${block.index} — hash: ${block.block_hash.slice(0, 16)}...`);
 
@@ -249,6 +227,72 @@ app.post('/api/data', checkAuthToken, (req, res) => {
   console.log(`[#${data.seq ?? '?'}] T:${data.temp}°C H:${data.hum}% P:${data.pression}hPa G:${data.gaz} Pres:${data.presence} RSSI:${data.rssi||'?'}dBm`);
   res.json({ ok: true, block_index: block.index });
 });
+
+// Fichiers statiques protégés par session
+app.use(requireAuth, express.static(path.join(__dirname, 'public')));
+
+const clients = new Set();
+let dataHistory = [];
+let stats = { totalReceived: 0, totalErrors: 0, lastUpdate: null };
+let isConnected = false;
+let lastDataTime = null;
+
+// Vérifie toutes les 5s si la carte est toujours active (timeout 15s)
+setInterval(() => {
+  if (lastDataTime && isConnected) {
+    const secondsSinceLastData = (Date.now() - lastDataTime) / 1000;
+    if (secondsSinceLastData > 15) {
+      isConnected = false;
+      broadcast({ type: 'status', connected: false, port: 'WiFi', stats });
+      console.log('Carte déconnectée — aucune donnée depuis', Math.round(secondsSinceLastData), 'secondes');
+    }
+  }
+}, 5000);
+
+wss.on('connection', (ws, req) => {
+  // express-session a besoin d'un objet réponse minimal pour ne pas planter
+  const fakeRes = { getHeader: () => {}, setHeader: () => {}, on: () => {}, end: () => {} };
+
+  sessionMiddleware(req, fakeRes, () => {
+    if (!req.session || !req.session.authenticated) {
+      ws.close(1008, 'Unauthorized');
+      return;
+    }
+
+    clients.add(ws);
+    console.log('Client WebSocket connecté');
+
+    ws.send(JSON.stringify({ type: 'status', connected: isConnected, port: 'WiFi', stats }));
+    ws.send(JSON.stringify({ type: 'history', data: dataHistory }));
+
+    ws.on('message', msg => {
+      try {
+        const data = JSON.parse(msg);
+        if (data.type === 'update_thresholds') {
+          console.log('Seuils mis à jour:', data.thresholds);
+        }
+      } catch(e) {}
+    });
+
+    ws.on('close', () => clients.delete(ws));
+    ws.on('error', () => clients.delete(ws));
+  });
+});
+
+function broadcast(obj) {
+  const msg = JSON.stringify(obj);
+  for (const c of clients) {
+    if (c.readyState === WebSocket.OPEN) c.send(msg);
+  }
+}
+
+// ============================================================
+// ROUTES
+// ============================================================
+app.get('/api/status',  requireAuth, (_req, res) => res.json({ connected: isConnected, stats }));
+app.get('/api/history', requireAuth, (_req, res) => res.json(dataHistory));
+app.get('/api/chain',   requireAuth, (_req, res) => res.json(chain));
+
 
 // ============================================================
 // NGROK — tunnel public optionnel
