@@ -235,6 +235,29 @@
 
   </main>
 
+  <!-- PANNEAU REGISTRE CHAINÉ SHA-256 -->
+  <section class="chain-section">
+    <div class="chain-header" id="chain-toggle">
+      <span>Registre chainé SHA-256</span>
+      <span class="chain-badge" id="chain-count">0 blocs</span>
+      <span class="chain-chevron" id="chain-chevron">▼</span>
+    </div>
+    <div class="chain-body hidden" id="chain-body">
+      <table class="chain-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Horodatage</th>
+            <th>data_hash</th>
+            <th>block_hash</th>
+            <th>HMAC</th>
+          </tr>
+        </thead>
+        <tbody id="chain-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
   <footer>
     <span>Smart CESI — Projet IoT FISA 2026</span>
   </footer>

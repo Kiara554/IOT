@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include "mbedtls/aes.h"
+#include "mbedtls/md.h"
 #include "../config.h"
 
 // ============================================================
@@ -46,8 +47,9 @@ void IRAM_ATTR setFlag() {
 // AES-128-CBC — déchiffrement
 // Clé et IV partagés avec l'émetteur (définis dans config.h)
 // ============================================================
-static const uint8_t aes_key[16] = AES_KEY_BYTES;
-static const uint8_t aes_iv[16]  = AES_IV_BYTES;
+static const uint8_t aes_key[16]  = AES_KEY_BYTES;
+static const uint8_t aes_iv[16]   = AES_IV_BYTES;
+static const uint8_t hmac_key[16] = HMAC_KEY_BYTES;
 
 static uint8_t hexNibble(char c) {
   if (c >= '0' && c <= '9') return c - '0';
@@ -101,6 +103,44 @@ bool decryptAES128(const String& hexCipher, String& plain) {
 
   plain = String((char*)output);
   free(output);
+  return true;
+}
+
+// ============================================================
+// HMAC-SHA256 — vérification
+// Reçoit la trame déchiffrée complète (avec ",MAC:xxxx" à la fin).
+// Retourne true si le HMAC est valide, et place le payload sans MAC dans `data`.
+// ============================================================
+bool verifyAndStripHMAC(const String& full, String& data, bool& hmacValid) {
+  const int macIdx = full.indexOf(",MAC:");
+  if (macIdx < 0) {
+    // Pas de champ MAC — trame ancienne ou sans HMAC
+    data      = full;
+    hmacValid = false;
+    return true;  // on laisse passer mais on signale
+  }
+
+  data             = full.substring(0, macIdx);
+  String rxMacHex  = full.substring(macIdx + 5, macIdx + 21); // 16 hex chars
+
+  // Recalcul du HMAC sur la partie données
+  uint8_t hmac[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
+  mbedtls_md_hmac_starts(&ctx, hmac_key, sizeof(hmac_key));
+  mbedtls_md_hmac_update(&ctx, (const uint8_t*)data.c_str(), data.length());
+  mbedtls_md_hmac_finish(&ctx, hmac);
+  mbedtls_md_free(&ctx);
+
+  char expected[17];
+  for (int i = 0; i < 8; i++) sprintf(expected + i * 2, "%02x", hmac[i]);
+  expected[16] = '\0';
+
+  hmacValid = (rxMacHex == String(expected));
+  if (!hmacValid) {
+    Serial.printf("HMAC invalide — attendu %s, reçu %s\n", expected, rxMacHex.c_str());
+  }
   return true;
 }
 
@@ -208,14 +248,19 @@ static bool isValidTrame(const String& s) {
 
 // Effectue le POST HTTP. Retourne true si succès (2xx).
 static bool httpPost(const String& payload, int rssi) {
-  const String safe = sanitizePayload(payload);
+  // 1. Vérification et retrait du HMAC
+  String data;
+  bool   hmacValid = false;
+  verifyAndStripHMAC(payload, data, hmacValid);
+
+  const String safe = sanitizePayload(data);
 
   if (!isValidTrame(safe)) {
     Serial.println("Trame ignorée après sanitize (contenu invalide)");
     return false;
   }
 
-  // Extrait le seqNum de l'émetteur depuis le champ S: du plaintext
+  // 2. Extraction du seqNum de l'émetteur (champ S:)
   const long seq = extractSeq(safe);
 
   HTTPClient http;
@@ -223,7 +268,8 @@ static bool httpPost(const String& payload, int rssi) {
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Auth-Token", AUTH_TOKEN);
 
-  String body = "{\"payload\":\"" + safe + "\",\"rssi\":" + rssi;
+  String body = "{\"payload\":\"" + safe + "\",\"rssi\":" + rssi
+              + ",\"hmac_valid\":" + (hmacValid ? "true" : "false");
   if (seq >= 0) body += ",\"seq\":" + String(seq);
   body += "}";
 

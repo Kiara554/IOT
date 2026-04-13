@@ -3,6 +3,7 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
 #include "mbedtls/aes.h"
+#include "mbedtls/md.h"
 
 // --- CONFIGURATION PINS ---
 #define PIR_PIN 33
@@ -29,6 +30,12 @@ static const uint8_t aes_iv[16] = {
   0x53,0x6d,0x61,0x72,0x74,0x43,0x45,0x53,
   0x49,0x5f,0x49,0x56,0x5f,0x32,0x30,0x32
 };
+// Clé HMAC (16 octets) — "SmartCESI_HMAC26"
+// DOIT correspondre à HMAC_KEY_BYTES dans config.h du récepteur
+static const uint8_t hmac_key[16] = {
+  0x53,0x6d,0x61,0x72,0x74,0x43,0x45,0x53,
+  0x49,0x5f,0x48,0x4d,0x41,0x43,0x32,0x36
+};
 
 // plaintext max ~80 chars → padded max 96 bytes → hex max 192 chars + null
 #define PLAIN_BUF_SIZE  96
@@ -40,6 +47,23 @@ static RadioEvents_t RadioEvents;
 static char  plaintext[PLAIN_BUF_SIZE];
 static char  txpacket[TX_BUF_SIZE];
 static uint32_t seqNum = 0;
+
+// ============================================================
+// HMAC-SHA256 tronqué (8 octets → 16 hex chars)
+// Écrit le résultat dans hexOut (doit être >= 17 octets).
+// ============================================================
+void computeHMAC(const char* data, char* hexOut) {
+  uint8_t hmac[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
+  mbedtls_md_hmac_starts(&ctx, hmac_key, sizeof(hmac_key));
+  mbedtls_md_hmac_update(&ctx, (const uint8_t*)data, strlen(data));
+  mbedtls_md_hmac_finish(&ctx, hmac);
+  mbedtls_md_free(&ctx);
+  for (int i = 0; i < 8; i++) sprintf(hexOut + i * 2, "%02x", hmac[i]);
+  hexOut[16] = '\0';
+}
 
 // ============================================================
 // Chiffrement AES-128-CBC avec padding PKCS7.
@@ -129,6 +153,12 @@ void loop() {
   snprintf(plaintext, sizeof(plaintext),
            "S:%lu,T:%.1f,H:%.1f,P:%.0f,G:%d,Presence:%d",
            seqNum, t, h, p, gaz, pir);
+
+  // Ajout du HMAC-SHA256 tronqué (8 octets) en fin de trame
+  char macHex[17];
+  computeHMAC(plaintext, macHex);
+  strncat(plaintext, ",MAC:", sizeof(plaintext) - strlen(plaintext) - 1);
+  strncat(plaintext, macHex,  sizeof(plaintext) - strlen(plaintext) - 1);
 
   Serial.printf("[#%lu] Clair: %s\n", seqNum, plaintext);
 

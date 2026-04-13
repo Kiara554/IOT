@@ -483,6 +483,70 @@ footer {
 
 .hidden { display: none !important; }
 
+/* ── Panneau registre chainé SHA-256 ─────────────────────── */
+.chain-section {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+  padding: 0 32px;
+}
+.chain-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 18px;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  user-select: none;
+}
+.chain-header:hover { background: var(--bg); }
+.chain-badge {
+  background: var(--accent, #3a8fd4);
+  color: #fff;
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 11px;
+}
+.chain-chevron { margin-left: auto; transition: transform .2s; }
+.chain-chevron.open { transform: rotate(180deg); }
+.chain-body {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  overflow-x: auto;
+}
+.chain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+}
+.chain-table th {
+  background: var(--bg);
+  padding: 8px 12px;
+  text-align: left;
+  color: var(--text-2);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+.chain-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-1);
+  white-space: nowrap;
+}
+.chain-table tr:last-child td { border-bottom: none; }
+.chain-table tr:hover td { background: var(--bg); }
+.chain-hmac-ok  { color: #27ae60; font-weight: 600; }
+.chain-hmac-bad { color: #c0392b; font-weight: 600; }
+.chain-hmac-na  { color: var(--text-3); }
+
 @media (max-width: 1200px) {
   .cards-grid { grid-template-columns: repeat(3, 1fr); }
   .presence-card { grid-column: span 1; }
@@ -493,3 +557,4 @@ footer {
   .charts-grid { grid-template-columns: 1fr; }
   .bottom-row { grid-template-columns: 1fr; }
 }
+

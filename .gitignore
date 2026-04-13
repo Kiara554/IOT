@@ -27,6 +27,9 @@ code_recepteur/code_recepteur_original.ino
 
 # Configuration locale (contient les identifiants WiFi)
 code_recepteur/config.h
+
+# Variables d'environnement (tokens secrets)
+smart-cesi-dashboard/.env
 upload code.txt
 
 

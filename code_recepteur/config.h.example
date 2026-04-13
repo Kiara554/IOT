@@ -10,7 +10,7 @@
 #define SERVER_URL_1     "http://192.168.1.XX:3000/api/data"
 
 // ============================================================
-// RÉSEAU 2 — ex: école / CESI
+// RÉSEAU 2 — ex: école
 // ============================================================
 #define WIFI_SSID_2      "Ton_SSID_Ecole"
 #define WIFI_PASSWORD_2  "Ton_MotDePasse_Ecole"
@@ -21,6 +21,13 @@
 // Doit correspondre à AUTH_TOKEN dans smart-cesi-dashboard/server.js
 // ============================================================
 #define AUTH_TOKEN     "token_exemple"
+
+// ============================================================
+// Clé HMAC-SHA256 (16 octets)
+// DOIT correspondre à hmac_key dans code_emetteur.ino
+// Valeur par défaut : "SmartCESI_HMAC26"
+// ============================================================
+#define HMAC_KEY_BYTES {0x53,0x6d,0x61,0x72,0x74,0x43,0x45,0x53,0x49,0x5f,0x48,0x4d,0x41,0x43,0x32,0x36}
 
 // ============================================================
 // Clé AES-128-CBC (16 octets)

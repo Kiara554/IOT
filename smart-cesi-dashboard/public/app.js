@@ -29,7 +29,8 @@ let presenceDetectedCount = 0;
 // ============================================================
 let ws;
 function connectWS() {
-  ws = new WebSocket(`ws://${location.host}`);
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${wsProto}//${location.host}`);
 
   ws.onopen = () => {
     setStatus(true);
@@ -51,7 +52,7 @@ function connectWS() {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === 'status')   handleStatus(msg);
-      if (msg.type === 'data')     handleData(msg.payload);
+      if (msg.type === 'data')   { handleData(msg.payload); if (!chainBody.classList.contains('hidden')) refreshChain(); }
       if (msg.type === 'history')  msg.data.forEach(d => updateCharts(d));
       if (msg.type === 'seq_loss') handleSeqLoss(msg);
     } catch(e) {
@@ -457,6 +458,50 @@ document.getElementById('btn-clear-alerts').addEventListener('click', () => {
   document.getElementById('total-errors').textContent = 0;
   renderModal();
 });
+
+// ============================================================
+// PANNEAU REGISTRE CHAINÉ SHA-256
+// ============================================================
+const chainToggle  = document.getElementById('chain-toggle');
+const chainBody    = document.getElementById('chain-body');
+const chainChevron = document.getElementById('chain-chevron');
+const chainCount   = document.getElementById('chain-count');
+const chainRows    = document.getElementById('chain-rows');
+
+chainToggle.addEventListener('click', () => {
+  const open = !chainBody.classList.contains('hidden');
+  chainBody.classList.toggle('hidden', open);
+  chainChevron.classList.toggle('open', !open);
+  if (!open) refreshChain();
+});
+
+function refreshChain() {
+  fetch('/api/chain')
+    .then(r => r.json())
+    .then(blocks => {
+      chainCount.textContent = `${blocks.length} bloc${blocks.length > 1 ? 's' : ''}`;
+      const recent = blocks.slice(-20).reverse(); // 20 derniers, du plus récent au plus ancien
+      chainRows.innerHTML = recent.map(b => {
+        const hmacClass = b.hmac_valid === true  ? 'chain-hmac-ok'
+                        : b.hmac_valid === false ? 'chain-hmac-bad'
+                        : 'chain-hmac-na';
+        const hmacText  = b.hmac_valid === true  ? '✓ OK'
+                        : b.hmac_valid === false ? '✗ INVALIDE'
+                        : '—';
+        return `<tr>
+          <td>${b.index}</td>
+          <td>${new Date(b.timestamp).toLocaleTimeString('fr-FR')}</td>
+          <td title="${b.data_hash}">${b.data_hash.slice(0, 16)}…</td>
+          <td title="${b.block_hash}">${b.block_hash.slice(0, 16)}…</td>
+          <td class="${hmacClass}">${hmacText}</td>
+        </tr>`;
+      }).join('');
+    })
+    .catch(() => { chainRows.innerHTML = '<tr><td colspan="5">Erreur de chargement</td></tr>'; });
+}
+
+// Rafraîchit le panneau à chaque nouvelle trame si ouvert
+const _origHandleData = handleData;
 
 // ============================================================
 // START — restaure les seuils dans le formulaire au chargement

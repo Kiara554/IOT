@@ -1,3 +1,5 @@
+require('dotenv').config();
+const ngrok      = require('@ngrok/ngrok');
 const express    = require('express');
 const WebSocket  = require('ws');
 const path       = require('path');
@@ -48,7 +50,8 @@ function addBlock(data) {
     timestamp,
     data_hash:     dataHash,
     previous_hash: lastBlockHash,
-    block_hash:    blockHash
+    block_hash:    blockHash,
+    hmac_valid:    data.hmac_valid ?? null
   };
   chain.push(block);
   lastBlockHash = blockHash;
@@ -215,8 +218,9 @@ app.post('/api/data', checkAuthToken, (req, res) => {
     return res.status(422).json({ error: 'trame invalide' });
   }
 
-  data.timestamp = Date.now();
-  if (body.rssi !== undefined) data.rssi = body.rssi;
+  data.timestamp  = Date.now();
+  if (body.rssi       !== undefined) data.rssi       = body.rssi;
+  if (body.hmac_valid !== undefined) data.hmac_valid = body.hmac_valid;
 
   // Numéro de séquence — priorité au champ S: parsé depuis la trame LoRa (émetteur)
   // body.seq est conservé en fallback si l'émetteur ne l'inclut pas encore
@@ -247,9 +251,16 @@ app.post('/api/data', checkAuthToken, (req, res) => {
 });
 
 // ============================================================
+// NGROK — tunnel public optionnel
+// Activer : définir la variable d'environnement NGROK_AUTHTOKEN
+//   Windows : set NGROK_AUTHTOKEN=ton_token && npm start
+//   ou créer un fichier .env avec NGROK_AUTHTOKEN=ton_token
+// Obtenir un token gratuit sur https://dashboard.ngrok.com
+// ============================================================
+// ============================================================
 // START
 // ============================================================
-server.listen(CONFIG.webPort, () => {
+server.listen(CONFIG.webPort, async () => {
   console.log('\n╔════════════════════════════════════╗');
   console.log('║     Smart CESI — FabLab Monitor    ║');
   console.log('╚════════════════════════════════════╝\n');
@@ -257,4 +268,15 @@ server.listen(CONFIG.webPort, () => {
   console.log(`Réception : WiFi HTTP POST → /api/data  [auth: X-Auth-Token]`);
   console.log(`Registre  : GET /api/chain`);
   console.log(`Logs CSV  : ${LOGS_DIR}\n`);
+
+  if (process.env.NGROK_TOKEN) {
+    try {
+      const listener = await ngrok.forward({ addr: CONFIG.webPort, authtoken: process.env.NGROK_TOKEN });
+      console.log(`[NGROK] Tunnel actif → ${listener.url()}`);
+    } catch(e) {
+      console.warn(`[NGROK] Échec : ${e.message}`);
+    }
+  } else {
+    console.log('[NGROK] Non configuré — ajouter NGROK_TOKEN dans .env pour activer le tunnel');
+  }
 });
