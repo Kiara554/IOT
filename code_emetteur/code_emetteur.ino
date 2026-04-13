@@ -123,16 +123,17 @@ void loop() {
   if (isnan(h)) h = 0.0;
   if (isnan(p)) p = 0.0;
 
-  // Construction du texte clair (format attendu par le serveur)
+  // Construction du texte clair — S: inclus avant chiffrement
   snprintf(plaintext, sizeof(plaintext),
-           "T:%.1f,H:%.1f,P:%.0f,G:%d,Presence:%d",
-           t, h, p, gaz, pir);
+           "S:%lu,T:%.1f,H:%.1f,P:%.0f,G:%d,Presence:%d",
+           seqNum, t, h, p, gaz, pir);
 
   Serial.printf("[#%lu] Clair: %s\n", seqNum, plaintext);
 
   // Chiffrement AES-128-CBC
   if (!encryptAES128(plaintext, txpacket, sizeof(txpacket))) {
     Serial.println("Chiffrement echoue — trame ignoree");
+    seqNum++;
     delay(5000);
     return;
   }

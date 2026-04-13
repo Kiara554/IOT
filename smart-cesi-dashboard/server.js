@@ -117,7 +117,8 @@ function parseTrame(line) {
       if (!key || val === undefined) return;
       const k = key.trim().toUpperCase();
       const v = parseFloat(val.trim());
-      if      (k === 'T')        obj.temp     = v;
+      if      (k === 'S')        obj.seq      = v;
+      else if (k === 'T')        obj.temp     = v;
       else if (k === 'H')        obj.hum      = v;
       else if (k === 'P')        obj.pression = v;
       else if (k === 'G')        obj.gaz      = v;
@@ -215,10 +216,12 @@ app.post('/api/data', checkAuthToken, (req, res) => {
   data.timestamp = Date.now();
   if (body.rssi !== undefined) data.rssi = body.rssi;
 
-  // Numéro de séquence
-  if (body.seq !== undefined) {
-    checkSeq(Number(body.seq));
-    data.seq = Number(body.seq);
+  // Numéro de séquence — priorité au champ S: parsé depuis la trame LoRa (émetteur)
+  // body.seq est conservé en fallback si l'émetteur ne l'inclut pas encore
+  const seqVal = data.seq ?? (body.seq !== undefined ? Number(body.seq) : undefined);
+  if (seqVal !== undefined) {
+    checkSeq(seqVal);
+    data.seq = seqVal;
   }
 
   // Registre chainé
