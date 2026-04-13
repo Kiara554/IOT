@@ -1,6 +1,37 @@
 // Copie ce fichier en "config.h" et remplis tes informations
+// config.h est ignoré par git (contient des secrets).
 #pragma once
 
-#define WIFI_SSID      "TON_SSID"
-#define WIFI_PASSWORD  "TON_MOT_DE_PASSE"
-#define SERVER_URL     "http://192.168.1.XX:3000/api/data"
+// ============================================================
+// RÉSEAU 1 — ex: maison
+// ============================================================
+#define WIFI_SSID_1      "Ton_SSID_Maison"
+#define WIFI_PASSWORD_1  "Ton_MotDePasse_Maison"
+#define SERVER_URL_1     "http://192.168.1.XX:3000/api/data"
+
+// ============================================================
+// RÉSEAU 2 — ex: école / CESI
+// ============================================================
+#define WIFI_SSID_2      "Ton_SSID_Ecole"
+#define WIFI_PASSWORD_2  "Ton_MotDePasse_Ecole"
+#define SERVER_URL_2     "http://192.168.X.XX:3000/api/data"
+
+// ============================================================
+// Authentification HTTP
+// Doit correspondre à AUTH_TOKEN dans smart-cesi-dashboard/server.js
+// ============================================================
+#define AUTH_TOKEN     "token_exemple"
+
+// ============================================================
+// Clé AES-128-CBC (16 octets)
+// DOIT correspondre exactement à la clé dans code_emetteur.ino
+// Valeur par défaut : "smartcesi2024key"
+// ============================================================
+#define AES_KEY_BYTES  {0x73,0x6d,0x61,0x72,0x74,0x63,0x65,0x73,0x69,0x32,0x30,0x32,0x34,0x6b,0x65,0x79}
+
+// ============================================================
+// IV AES-128-CBC (16 octets)
+// DOIT correspondre exactement à l'IV dans code_emetteur.ino
+// Valeur par défaut : "SmartCESI_IV_202"
+// ============================================================
+#define AES_IV_BYTES   {0x53,0x6d,0x61,0x72,0x74,0x43,0x45,0x53,0x49,0x5f,0x49,0x56,0x5f,0x32,0x30,0x32}

@@ -140,39 +140,92 @@ static bool dequeueFrame(String& payload, int& rssi) {
 }
 
 // ============================================================
-// NUMÉRO DE SÉQUENCE
+// NUMÉRO DE SÉQUENCE — extrait du champ S: du plaintext déchiffré
 // ============================================================
-static uint32_t seqNum = 0;
+// Extrait la valeur de S: dans "S:42,T:21.5,..."
+// Retourne -1 si absent.
+static long extractSeq(const String& trame) {
+  int idx = trame.indexOf("S:");
+  if (idx < 0) return -1;
+  return trame.substring(idx + 2).toInt();
+}
 
 // ============================================================
-// WiFi
+// WiFi — essaie les réseaux définis dans config.h dans l'ordre
 // ============================================================
+struct WifiNetwork { const char* ssid; const char* password; const char* serverUrl; };
+
+static const WifiNetwork WIFI_NETWORKS[] = {
+  { WIFI_SSID_1, WIFI_PASSWORD_1, SERVER_URL_1 },
+  { WIFI_SSID_2, WIFI_PASSWORD_2, SERVER_URL_2 },
+};
+static const int WIFI_NETWORK_COUNT = sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
+
+// URL active — mise à jour selon le réseau qui se connecte
+static const char* activeServerUrl = SERVER_URL_1;
+
 void connectWiFi() {
-  Serial.printf("Connexion WiFi à %s...\n", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
+  for (int n = 0; n < WIFI_NETWORK_COUNT; n++) {
+    const WifiNetwork& net = WIFI_NETWORKS[n];
+    Serial.printf("Connexion WiFi à %s...\n", net.ssid);
+    WiFi.begin(net.ssid, net.password);
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+      delay(500);
+      Serial.print(".");
+      attempts++;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      activeServerUrl = net.serverUrl;
+      Serial.printf("\nWiFi connecté — réseau: %s | IP: %s | serveur: %s\n",
+                    net.ssid, WiFi.localIP().toString().c_str(), activeServerUrl);
+      return;
+    }
+    Serial.printf("\nEchec sur %s\n", net.ssid);
+    WiFi.disconnect();
+    delay(200);
   }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\nWiFi connecté — IP: %s\n", WiFi.localIP().toString().c_str());
-  } else {
-    Serial.println("\nEchec WiFi");
+  Serial.println("Aucun réseau disponible");
+}
+
+// Supprime les caractères de contrôle et les guillemets/backslash du payload
+// pour éviter de casser le JSON construit manuellement.
+static String sanitizePayload(const String& s) {
+  String out;
+  out.reserve(s.length());
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if (c >= 0x20 && c != '"' && c != '\\') out += c;
   }
+  return out;
+}
+
+// Vérifie que le texte déchiffré ressemble à une trame valide
+// Le format attendu est "S:xx,T:xx.x,..." ou "T:xx.x,..."
+static bool isValidTrame(const String& s) {
+  return s.length() > 5 && (s.startsWith("S:") || s.startsWith("T:"));
 }
 
 // Effectue le POST HTTP. Retourne true si succès (2xx).
 static bool httpPost(const String& payload, int rssi) {
+  const String safe = sanitizePayload(payload);
+
+  if (!isValidTrame(safe)) {
+    Serial.println("Trame ignorée après sanitize (contenu invalide)");
+    return false;
+  }
+
+  // Extrait le seqNum de l'émetteur depuis le champ S: du plaintext
+  const long seq = extractSeq(safe);
+
   HTTPClient http;
-  http.begin(SERVER_URL);
+  http.begin(activeServerUrl);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Auth-Token", AUTH_TOKEN);
 
-  String body = "{\"payload\":\"" + payload + "\",\"rssi\":" + rssi
-              + ",\"seq\":" + seqNum + "}";
-  seqNum++;
+  String body = "{\"payload\":\"" + safe + "\",\"rssi\":" + rssi;
+  if (seq >= 0) body += ",\"seq\":" + String(seq);
+  body += "}";
 
   int code = http.POST(body);
   http.end();
