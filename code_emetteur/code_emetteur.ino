@@ -107,6 +107,8 @@ void setup() {
   Radio.SetTxConfig(MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
                     LORA_SPREADING_FACTOR, LORA_CODINGRATE, 8,
                     false, true, 0, 0, false, 3000);
+  // Sync word 0x12 — doit correspondre au récepteur (RadioLib LORA_SYNC 0x12)
+  Radio.SetPublicNetwork(false);
 
   pinMode(PIR_PIN, INPUT);
   Serial.println("Emetteur pret !");
