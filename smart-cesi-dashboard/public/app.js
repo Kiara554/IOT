@@ -50,9 +50,10 @@ function connectWS() {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'status')  handleStatus(msg);
-      if (msg.type === 'data')    handleData(msg.payload);
-      if (msg.type === 'history') msg.data.forEach(d => updateCharts(d));
+      if (msg.type === 'status')   handleStatus(msg);
+      if (msg.type === 'data')     handleData(msg.payload);
+      if (msg.type === 'history')  msg.data.forEach(d => updateCharts(d));
+      if (msg.type === 'seq_loss') handleSeqLoss(msg);
     } catch(e) {
       addLog('Erreur parsing message: ' + e.message, 'err');
     }
@@ -77,6 +78,55 @@ function handleStatus(msg) {
     document.getElementById('total-received').textContent = stats.totalReceived || 0;
     document.getElementById('total-errors').textContent   = stats.totalErrors   || 0;
   }
+}
+
+// ============================================================
+// PERTE DE TRAME LORA
+// ============================================================
+function handleSeqLoss(msg) {
+  const n = msg.lost;
+  const text = n === 1
+    ? `1 trame LoRa perdue (seq ${msg.expected})`
+    : `${n} trames LoRa perdues (seq ${msg.expected} → ${msg.received - 1})`;
+
+  // Ajout dans l'historique des alertes (visible dans le modal)
+  alertHistory.unshift({
+    id:     Date.now() + Math.random(),
+    msg:    text,
+    time:   new Date(),
+    status: 'loss'   // type distinct pour distinguer des alertes capteur
+  });
+
+  // Le compteur est mis à jour via handleStatus qui arrive juste après
+  // → on ne l'incrémente pas localement pour éviter le doublon
+  addLog('Trame(s) perdue(s) : ' + text, 'err');
+  showLossToast(text);
+}
+
+function showLossToast(message) {
+  // Réutilise un toast existant ou en crée un nouveau
+  let toast = document.getElementById('loss-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'loss-toast';
+    toast.style.cssText = [
+      'position:fixed', 'bottom:24px', 'right:24px',
+      'background:#c0392b', 'color:#fff',
+      'padding:10px 18px', 'border-radius:8px',
+      'font-size:13px', 'font-family:DM Mono,monospace',
+      'box-shadow:0 4px 16px rgba(0,0,0,.25)',
+      'z-index:9999', 'opacity:0',
+      'transition:opacity .3s ease'
+    ].join(';');
+    document.body.appendChild(toast);
+  }
+
+  // Annule le timer précédent si un toast est déjà visible
+  clearTimeout(toast._hideTimer);
+
+  toast.textContent = '⚠ ' + message;
+  toast.style.opacity = '1';
+  toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, 4000);
 }
 
 // ============================================================
@@ -368,19 +418,23 @@ function renderModal() {
     body.innerHTML = '<p class="modal-empty">Aucune alerte enregistrée.</p>';
     return;
   }
-  body.innerHTML = alertHistory.map(a => `
+  body.innerHTML = alertHistory.map(a => {
+    const isLoss  = a.status === 'loss';
+    const badge   = isLoss ? 'Perdu' : (a.status === 'active' ? 'Actif' : 'Résolu');
+    const dotColor = isLoss ? '#c0392b' : '';
+    return `
     <div class="alert-entry ${a.status}">
-      <div class="alert-entry-dot"></div>
+      <div class="alert-entry-dot" ${dotColor ? `style="background:${dotColor}"` : ''}></div>
       <div class="alert-entry-content">
         <div class="alert-entry-msg">${a.msg}</div>
         <div class="alert-entry-meta">
-          Déclenché : ${a.time.toLocaleTimeString('fr-FR')}
+          ${isLoss ? 'Détecté' : 'Déclenché'} : ${a.time.toLocaleTimeString('fr-FR')}
           ${a.resolvedTime ? ' — Résolu : ' + a.resolvedTime.toLocaleTimeString('fr-FR') : ''}
         </div>
       </div>
-      <span class="alert-entry-badge">${a.status === 'active' ? 'Actif' : 'Résolu'}</span>
-    </div>
-  `).join('');
+      <span class="alert-entry-badge" ${isLoss ? 'style="background:#c0392b"' : ''}>${badge}</span>
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('card-errors').addEventListener('click', () => {

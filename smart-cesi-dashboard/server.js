@@ -63,8 +63,10 @@ let lastSeqNum = -1;
 function checkSeq(seq) {
   if (typeof seq !== 'number') return;
   if (lastSeqNum >= 0 && seq !== lastSeqNum + 1) {
-    const expected = lastSeqNum + 1;
-    console.warn(`[SEQ] Saut de séquence détecté — attendu ${expected}, reçu ${seq} (${seq - expected} trame(s) perdue(s))`);
+    const lost = seq - (lastSeqNum + 1);
+    console.warn(`[SEQ] Saut de séquence — attendu ${lastSeqNum + 1}, reçu ${seq} (${lost} trame(s) perdue(s))`);
+    broadcast({ type: 'seq_loss', lost, expected: lastSeqNum + 1, received: seq });
+    stats.totalErrors += 1;  // 1 événement de perte, quel que soit le nombre de trames perdues
   }
   lastSeqNum = seq;
 }
