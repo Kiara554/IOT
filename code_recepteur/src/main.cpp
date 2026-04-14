@@ -3,7 +3,7 @@
 #include <Wire.h>
 #include <SSD1306Wire.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
+#include <PubSubClient.h>
 #include "mbedtls/aes.h"
 #include "mbedtls/md.h"
 #include "../config.h"
@@ -36,6 +36,9 @@
 
 SX1262 radio = new Module(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
 SSD1306Wire display(0x3c, OLED_SDA, OLED_SCL);
+
+WiFiClient   wifiClient;
+PubSubClient mqttClient(wifiClient);
 
 volatile bool receivedFlag = false;
 
@@ -145,7 +148,7 @@ bool verifyAndStripHMAC(const String& full, String& data, bool& hmacValid) {
 }
 
 // ============================================================
-// BUFFER CIRCULAIRE — stockage local si WiFi indisponible
+// BUFFER CIRCULAIRE — stockage local si broker MQTT injoignable
 // ============================================================
 #define FRAME_BUF_SIZE 20
 
@@ -182,8 +185,6 @@ static bool dequeueFrame(String& payload, int& rssi) {
 // ============================================================
 // NUMÉRO DE SÉQUENCE — extrait du champ S: du plaintext déchiffré
 // ============================================================
-// Extrait la valeur de S: dans "S:42,T:21.5,..."
-// Retourne -1 si absent.
 static long extractSeq(const String& trame) {
   int idx = trame.indexOf("S:");
   if (idx < 0) return -1;
@@ -193,16 +194,13 @@ static long extractSeq(const String& trame) {
 // ============================================================
 // WiFi — essaie les réseaux définis dans config.h dans l'ordre
 // ============================================================
-struct WifiNetwork { const char* ssid; const char* password; const char* serverUrl; };
+struct WifiNetwork { const char* ssid; const char* password; };
 
 static const WifiNetwork WIFI_NETWORKS[] = {
-  { WIFI_SSID_1, WIFI_PASSWORD_1, SERVER_URL_1 },
-  { WIFI_SSID_2, WIFI_PASSWORD_2, SERVER_URL_2 },
+  { WIFI_SSID_1, WIFI_PASSWORD_1 },
+  { WIFI_SSID_2, WIFI_PASSWORD_2 },
 };
 static const int WIFI_NETWORK_COUNT = sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
-
-// URL active — mise à jour selon le réseau qui se connecte
-static const char* activeServerUrl = SERVER_URL_1;
 
 void connectWiFi() {
   for (int n = 0; n < WIFI_NETWORK_COUNT; n++) {
@@ -216,9 +214,8 @@ void connectWiFi() {
       attempts++;
     }
     if (WiFi.status() == WL_CONNECTED) {
-      activeServerUrl = net.serverUrl;
-      Serial.printf("\nWiFi connecté — réseau: %s | IP: %s | serveur: %s\n",
-                    net.ssid, WiFi.localIP().toString().c_str(), activeServerUrl);
+      Serial.printf("\nWiFi connecté — réseau: %s | IP: %s\n",
+                    net.ssid, WiFi.localIP().toString().c_str());
       return;
     }
     Serial.printf("\nEchec sur %s\n", net.ssid);
@@ -241,13 +238,37 @@ static String sanitizePayload(const String& s) {
 }
 
 // Vérifie que le texte déchiffré ressemble à une trame valide
-// Le format attendu est "S:xx,T:xx.x,..." ou "T:xx.x,..."
 static bool isValidTrame(const String& s) {
   return s.length() > 5 && (s.startsWith("S:") || s.startsWith("T:"));
 }
 
-// Effectue le POST HTTP. Retourne true si succès (2xx).
-static bool httpPost(const String& payload, int rssi) {
+// ============================================================
+// MQTT — connexion / reconnexion
+// Clean Session = false → session persistante côté broker
+// ============================================================
+static bool mqttReconnect() {
+  if (mqttClient.connected()) return true;
+
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+
+  Serial.printf("[MQTT] Connexion au broker %s:%d...\n", MQTT_BROKER, MQTT_PORT);
+  // connect(clientId, user, pass, willTopic, willQoS, willRetain, willMessage, cleanSession=false)
+  bool ok = mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD,
+                               nullptr, 0, false, nullptr, false);
+  if (ok) {
+    Serial.println("[MQTT] Connecté au broker");
+  } else {
+    Serial.printf("[MQTT] Echec connexion — état: %d\n", mqttClient.state());
+  }
+  return ok;
+}
+
+// ============================================================
+// MQTT — publication d'une trame
+// Publie sur campus/fablab/zone1/env/data
+// Publie sur campus/fablab/zone1/presence si Presence:1 détecté
+// ============================================================
+static bool mqttPublish(const String& payload, int rssi) {
   // 1. Vérification et retrait du HMAC
   String data;
   bool   hmacValid = false;
@@ -260,39 +281,45 @@ static bool httpPost(const String& payload, int rssi) {
     return false;
   }
 
-  // 2. Extraction du seqNum de l'émetteur (champ S:)
+  // 2. Extraction du numéro de séquence
   const long seq = extractSeq(safe);
 
-  HTTPClient http;
-  http.begin(activeServerUrl);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Auth-Token", AUTH_TOKEN);
+  // 3. Construction du JSON
+  String jsonPayload = "{\"payload\":\"" + safe + "\",\"rssi\":" + rssi
+                     + ",\"hmac_valid\":" + (hmacValid ? "true" : "false");
+  if (seq >= 0) jsonPayload += ",\"seq\":" + String(seq);
+  jsonPayload += "}";
 
-  String body = "{\"payload\":\"" + safe + "\",\"rssi\":" + rssi
-              + ",\"hmac_valid\":" + (hmacValid ? "true" : "false");
-  if (seq >= 0) body += ",\"seq\":" + String(seq);
-  body += "}";
-
-  int code = http.POST(body);
-  http.end();
-
-  if (code > 0 && code < 300) {
-    Serial.printf("HTTP POST OK: %d\n", code);
-    return true;
+  // 4. Connexion broker si nécessaire
+  if (!mqttClient.connected()) {
+    if (!mqttReconnect()) return false;
   }
-  Serial.printf("HTTP POST erreur: %s (code %d)\n",
-                http.errorToString(code).c_str(), code);
-  return false;
+
+  // 5. Publication — QoS 0 (limite de la bibliothèque PubSubClient pour les publishes)
+  bool ok = mqttClient.publish("campus/fablab/zone1/env/data", jsonPayload.c_str());
+
+  // 6. Publication séparée présence si détectée
+  if (safe.indexOf("Presence:1") >= 0) {
+    mqttClient.publish("campus/fablab/zone1/presence", "{\"presence\":1}");
+    Serial.println("[MQTT] Présence détectée — publié sur campus/fablab/zone1/presence");
+  }
+
+  if (ok) {
+    Serial.printf("[MQTT] Publié sur campus/fablab/zone1/env/data : %s\n", jsonPayload.c_str());
+  } else {
+    Serial.println("[MQTT] Echec publication");
+  }
+  return ok;
 }
 
-// Vide le buffer en envoyant les trames en attente.
+// Vide le buffer en republiant les trames en attente.
 static void flushBuffer() {
   if (bufCount == 0) return;
-  Serial.printf("WiFi rétabli — vidage de %d trame(s) en attente\n", bufCount);
+  Serial.printf("[MQTT] Broker rétabli — vidage de %d trame(s) en attente\n", bufCount);
   String p; int r;
-  while (bufCount > 0 && WiFi.status() == WL_CONNECTED) {
+  while (bufCount > 0 && mqttClient.connected()) {
     if (!dequeueFrame(p, r)) break;
-    if (!httpPost(p, r)) {
+    if (!mqttPublish(p, r)) {
       // En cas d'échec pendant le vidage, on rebufferise et on arrête
       bufferFrame(p, r);
       Serial.println("Echec vidage — arrêt, trames restantes conservées");
@@ -302,25 +329,32 @@ static void flushBuffer() {
 }
 
 void sendToServer(const String& payload, int rssi) {
-  // Tentative de reconnexion si nécessaire
+  // 1. Assurer la connexion WiFi
   if (WiFi.status() != WL_CONNECTED) {
     connectWiFi();
   }
-
   if (WiFi.status() != WL_CONNECTED) {
-    // Toujours hors ligne : on bufferise
     bufferFrame(payload, rssi);
     Serial.printf("WiFi KO — trame bufferisée (%d/%d)\n", bufCount, FRAME_BUF_SIZE);
     return;
   }
 
-  // WiFi dispo : vider le buffer d'abord
+  // 2. Assurer la connexion MQTT
+  if (!mqttClient.connected()) {
+    if (!mqttReconnect()) {
+      bufferFrame(payload, rssi);
+      Serial.printf("[MQTT] Broker KO — trame bufferisée (%d/%d)\n", bufCount, FRAME_BUF_SIZE);
+      return;
+    }
+  }
+
+  // 3. Vider le buffer d'abord
   if (bufCount > 0) flushBuffer();
 
-  // Envoyer la trame courante
-  if (!httpPost(payload, rssi)) {
+  // 4. Envoyer la trame courante
+  if (!mqttPublish(payload, rssi)) {
     bufferFrame(payload, rssi);
-    Serial.printf("POST échoué — trame bufferisée (%d/%d)\n", bufCount, FRAME_BUF_SIZE);
+    Serial.printf("[MQTT] Publication échouée — trame bufferisée (%d/%d)\n", bufCount, FRAME_BUF_SIZE);
   }
 }
 
@@ -363,6 +397,9 @@ void setup() {
   display.drawString(0, 35, "En attente LoRa...");
   display.display();
 
+  // MQTT — connexion initiale
+  mqttReconnect();
+
   // LoRa SX1262
   Serial.print("Initialisation LoRa...");
   int state = radio.begin(LORA_FREQ, LORA_BW, LORA_SF, LORA_CR, LORA_SYNC, LORA_POWER);
@@ -380,6 +417,11 @@ void setup() {
 // LOOP
 // ============================================================
 void loop() {
+  // Maintien de la connexion MQTT
+  if (WiFi.status() == WL_CONNECTED) {
+    mqttClient.loop();
+  }
+
   if (!receivedFlag) return;
   receivedFlag = false;
 
@@ -411,10 +453,10 @@ void loop() {
     display.drawString(0, 45, "Signal: " + String(rssi) + " dBm");
     display.display();
 
-    // Remettre LoRa en écoute AVANT le HTTP POST (bloquant)
+    // Remettre LoRa en écoute AVANT la publication MQTT (bloquant)
     radio.startReceive();
 
-    // Envoi WiFi
+    // Envoi MQTT
     sendToServer(plaintext, rssi);
 
   } else {

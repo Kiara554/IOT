@@ -16,6 +16,12 @@
 #define WIFI_PASSWORD_2  "Ton_MotDePasse_Ecole"
 #define SERVER_URL_2     "http://192.168.X.XX:3000/api/data"
 
+#define MQTT_BROKER    "192.168.X.X"   // IP du PC serveur — adapter selon le réseau actif
+#define MQTT_PORT      1883
+#define MQTT_USER      "fablab"
+#define MQTT_PASSWORD  "SmartCESI2026"
+#define MQTT_CLIENT_ID "lora-receiver"
+
 // ============================================================
 // Authentification HTTP
 // Doit correspondre à AUTH_TOKEN dans smart-cesi-dashboard/server.js
