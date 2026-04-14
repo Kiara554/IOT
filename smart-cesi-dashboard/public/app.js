@@ -19,10 +19,8 @@ let thresholds = (() => {
 
 let stats = { received: 0, errors: 0 };
 let dataHistory = [];
-let lastPresenceTime = null;
 let seqCounter = 0;
 let alertHistory = [];  // { id, msg, time, status: 'active'|'resolved' }
-let presenceDetectedCount = 0;
 
 // ============================================================
 // WEBSOCKET
@@ -52,7 +50,7 @@ function connectWS() {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === 'status')   handleStatus(msg);
-      if (msg.type === 'data')   { handleData(msg.payload); if (!chainBody.classList.contains('hidden')) refreshChain(); }
+      if (msg.type === 'data')   { handleData(msg.payload); refreshChain(); }
       if (msg.type === 'history')  msg.data.forEach(d => updateCharts(d));
       if (msg.type === 'seq_loss') handleSeqLoss(msg);
     } catch(e) {
@@ -170,9 +168,6 @@ function handleData(data) {
     v => Math.min(100, (v / 4095) * 100)
   );
 
-  // Présence
-  updatePresence(data.presence);
-
   // Alertes
   checkAlerts(data);
 
@@ -181,7 +176,7 @@ function handleData(data) {
   if (dataHistory.length > 60) dataHistory.shift();
   updateCharts(data);
 
-  addLog(`[seq:${seqCounter}] T:${data.temp?.toFixed(1)}°C H:${data.hum?.toFixed(1)}% G:${data.gaz} P:${data.presence ? 'OUI' : 'non'}`, 'ok');
+  addLog(`[seq:${seqCounter}] T:${data.temp?.toFixed(1)}°C H:${data.hum?.toFixed(1)}% G:${data.gaz}`, 'ok');
 }
 
 // ============================================================
@@ -207,36 +202,6 @@ function updateSensorCard(id, value, unit, isAlert, format, barPct) {
       statusEl.textContent = 'Normal';
       statusEl.className   = 'sensor-status ok';
     }
-  }
-}
-
-// ============================================================
-// PRESENCE
-// ============================================================
-function updatePresence(val) {
-  const circle  = document.getElementById('presence-circle');
-  const label   = document.getElementById('presence-label');
-  const badge   = document.getElementById('presence-badge');
-  const btext   = document.getElementById('presence-text');
-  const timeEl  = document.getElementById('presence-time');
-
-  if (val === 1) {
-    presenceDetectedCount = 0;
-  } else {
-    presenceDetectedCount++;
-  }
-
-  // On considère "vide" seulement après 2 cycles consécutifs sans détection
-  const occupied = val === 1 || presenceDetectedCount < 2;
-
-  circle.className = 'presence-circle ' + (occupied ? 'occupied' : 'empty');
-  label.textContent = occupied ? 'Occupé' : 'Vide';
-  badge.className   = 'presence-badge ' + (occupied ? 'occupied' : 'empty');
-  btext.textContent = occupied ? 'FabLab occupé' : 'FabLab vide';
-
-  if (val === 1) {
-    lastPresenceTime = new Date();
-    timeEl.textContent = lastPresenceTime.toLocaleTimeString('fr-FR');
   }
 }
 
@@ -386,9 +351,9 @@ document.getElementById('btn-apply').addEventListener('click', () => {
 // ============================================================
 document.getElementById('btn-export').addEventListener('click', () => {
   if (dataHistory.length === 0) { addLog('Aucune donnée à exporter', 'warn'); return; }
-  const header = 'timestamp,temp,hum,pression,gaz,presence\n';
+  const header = 'timestamp,temp,hum,pression,gaz\n';
   const rows = dataHistory.map(d =>
-    `${new Date().toISOString()},${d.temp},${d.hum},${d.pression},${d.gaz},${d.presence}`
+    `${new Date().toISOString()},${d.temp},${d.hum},${d.pression},${d.gaz}`
   ).join('\n');
   const blob = new Blob([header + rows], { type: 'text/csv' });
   const a = document.createElement('a');

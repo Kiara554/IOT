@@ -264,7 +264,6 @@ static bool mqttReconnect() {
 // ============================================================
 // MQTT — publication d'une trame
 // Publie sur campus/fablab/zone1/env/data
-// Publie sur campus/fablab/zone1/presence si Presence:1 détecté
 // ============================================================
 static bool mqttPublish(const String& payload, int rssi) {
   // 1. Vérification et retrait du HMAC
@@ -295,12 +294,6 @@ static bool mqttPublish(const String& payload, int rssi) {
 
   // 5. Publication — QoS 0 (limite de la bibliothèque PubSubClient pour les publishes)
   bool ok = mqttClient.publish("campus/fablab/zone1/env/data", jsonPayload.c_str());
-
-  // 6. Publication séparée présence si détectée
-  if (safe.indexOf("Presence:1") >= 0) {
-    mqttClient.publish("campus/fablab/zone1/presence", "{\"presence\":1}");
-    Serial.println("[MQTT] Présence détectée — publié sur campus/fablab/zone1/presence");
-  }
 
   if (ok) {
     Serial.printf("[MQTT] Publié sur campus/fablab/zone1/env/data : %s\n", jsonPayload.c_str());

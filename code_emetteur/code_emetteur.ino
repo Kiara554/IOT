@@ -6,7 +6,6 @@
 #include "mbedtls/md.h"
 
 // --- CONFIGURATION PINS ---
-#define PIR_PIN 33
 #define MQ_PIN 1
 #define Vext 18
 
@@ -134,7 +133,6 @@ void setup() {
   // Sync word 0x12 — doit correspondre au récepteur (RadioLib LORA_SYNC 0x12)
   Radio.SetPublicNetwork(false);
 
-  pinMode(PIR_PIN, INPUT);
   Serial.println("Emetteur pret !");
 }
 
@@ -143,7 +141,6 @@ void loop() {
   float h   = bme.readHumidity();
   float p   = bme.readPressure() / 100.0F;
   int   gaz = analogRead(MQ_PIN);
-  int   pir = digitalRead(PIR_PIN);
 
   if (isnan(t)) t = 0.0;
   if (isnan(h)) h = 0.0;
@@ -151,8 +148,8 @@ void loop() {
 
   // Construction du texte clair — S: inclus avant chiffrement
   snprintf(plaintext, sizeof(plaintext),
-           "S:%lu,T:%.1f,H:%.1f,P:%.0f,G:%d,Presence:%d",
-           seqNum, t, h, p, gaz, pir);
+           "S:%lu,T:%.1f,H:%.1f,P:%.0f,G:%d",
+           seqNum, t, h, p, gaz);
 
   // Ajout du HMAC-SHA256 tronqué (8 octets) en fin de trame
   char macHex[17];

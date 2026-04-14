@@ -82,7 +82,7 @@ function initLog() {
     currentLogDate = today;
     currentLogFile = path.join(LOGS_DIR, `data_${today}.csv`);
     if (!fs.existsSync(currentLogFile)) {
-      fs.writeFileSync(currentLogFile, 'timestamp,temp,hum,pression,gaz,presence,seq\n');
+      fs.writeFileSync(currentLogFile, 'timestamp,temp,hum,pression,gaz,seq\n');
     }
   }
 }
@@ -90,7 +90,7 @@ function initLog() {
 function logCSV(data) {
   try {
     initLog();
-    const line = `${new Date().toISOString()},${data.temp||''},${data.hum||''},${data.pression||''},${data.gaz||''},${data.presence||''},${data.seq ?? ''}\n`;
+    const line = `${new Date().toISOString()},${data.temp||''},${data.hum||''},${data.pression||''},${data.gaz||''},${data.seq ?? ''}\n`;
     fs.appendFileSync(currentLogFile, line);
   } catch(e) {
     console.error('Erreur CSV:', e.message);
@@ -99,7 +99,7 @@ function logCSV(data) {
 
 // ============================================================
 // PARSING — convertit la trame LoRa en objet JSON
-// "T:21.5,H:48.2,P:1016,G:355,Presence:1"
+// "T:21.5,H:48.2,P:1016,G:355"
 // ============================================================
 function parseTrame(line) {
   try {
@@ -108,7 +108,7 @@ function parseTrame(line) {
     // Si c'est déjà du JSON
     if (line.startsWith('{')) return JSON.parse(line);
 
-    // Format T:xx,H:xx,P:xx,G:xx,Presence:x
+    // Format T:xx,H:xx,P:xx,G:xx
     const obj = {};
     line.split(',').forEach(part => {
       const [key, val] = part.split(':');
@@ -120,7 +120,6 @@ function parseTrame(line) {
       else if (k === 'H')        obj.hum      = v;
       else if (k === 'P')        obj.pression = v;
       else if (k === 'G')        obj.gaz      = v;
-      else if (k === 'PRESENCE') obj.presence = v;
     });
 
     if (obj.temp === undefined) return null;
@@ -174,11 +173,11 @@ function processIncomingData(body) {
   broadcast({ type: 'data', payload: data });
   broadcast({ type: 'status', connected: true, port: 'MQTT', stats });
 
-  console.log(`[#${data.seq ?? '?'}] T:${data.temp}°C H:${data.hum}% P:${data.pression}hPa G:${data.gaz} Pres:${data.presence} RSSI:${data.rssi||'?'}dBm`);
+  console.log(`[#${data.seq ?? '?'}] T:${data.temp}°C H:${data.hum}% P:${data.pression}hPa G:${data.gaz} RSSI:${data.rssi||'?'}dBm`);
 
   // Publication de l'état courant avec Retain = true
   const statePayload = JSON.stringify({ temp: data.temp, hum: data.hum, pression: data.pression,
-                                        gaz: data.gaz, presence: data.presence, seq: data.seq,
+                                        gaz: data.gaz, seq: data.seq,
                                         rssi: data.rssi, timestamp: data.timestamp });
   mqttClient.publish('campus/fablab/zone1/env/state', statePayload, { qos: 1, retain: true });
 
@@ -317,8 +316,7 @@ mqttClient.on('connect', () => {
   const topics = [
     'campus/fablab/zone1/env/data',
     'campus/fablab/zone1/env/alert',
-    'campus/fablab/zone1/env/state',
-    'campus/fablab/zone1/presence'
+    'campus/fablab/zone1/env/state'
   ];
   topics.forEach(topic => mqttClient.subscribe(topic, { qos: 1 }));
   console.log('[MQTT] Connecté au broker Mosquitto — topics souscrits');
@@ -335,10 +333,6 @@ mqttClient.on('message', (topic, message) => {
 
   if (topic === 'campus/fablab/zone1/env/data') {
     processIncomingData(body);
-
-  } else if (topic === 'campus/fablab/zone1/presence') {
-    console.log('[MQTT] Présence détectée:', body);
-    broadcast({ type: 'presence', payload: body });
 
   } else if (topic === 'campus/fablab/zone1/env/alert') {
     console.warn('[MQTT] Alerte reçue:', body);

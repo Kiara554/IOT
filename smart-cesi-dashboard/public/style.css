@@ -55,24 +55,6 @@ header {
 .brand-sub { font-size: 12px; color: var(--text-3); font-weight: 400; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
-.presence-badge {
-  display: flex; align-items: center; gap: 6px;
-  padding: 5px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 99px;
-  font-size: 12px;
-  font-weight: 500;
-}
-.presence-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--text-3);
-  transition: background 0.3s;
-}
-.presence-badge.occupied .presence-dot { background: var(--ok); }
-.presence-badge.occupied { border-color: var(--ok); color: var(--ok); }
-.presence-badge.empty .presence-dot { background: var(--text-3); }
 
 .status-pill {
   display: flex; align-items: center; gap: 6px;
@@ -157,7 +139,7 @@ main {
 /* SENSOR CARDS */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 .sensor-card {
@@ -233,36 +215,6 @@ main {
 
 .sensor-range { font-size: 11px; color: var(--text-3); }
 
-/* PRESENCE CARD */
-.presence-card { grid-column: span 1; }
-.presence-display { display: flex; align-items: center; gap: 16px; margin-top: 4px; }
-.presence-circle {
-  width: 72px; height: 72px;
-  border-radius: 50%;
-  border: 3px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.4s ease;
-}
-.presence-circle.occupied {
-  border-color: var(--ok);
-  background: #edfbf3;
-  box-shadow: 0 0 0 6px rgba(45, 156, 90, 0.1);
-}
-.presence-circle.empty {
-  border-color: var(--border-strong);
-  background: var(--bg);
-}
-.presence-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-3);
-  text-align: center;
-  line-height: 1.3;
-}
-.presence-circle.occupied .presence-label { color: var(--ok); }
-.presence-since { font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
-.presence-time { font-size: 13px; font-weight: 500; font-family: 'DM Mono', monospace; }
 
 /* CHARTS */
 .charts-grid {
@@ -548,8 +500,7 @@ footer {
 .chain-hmac-na  { color: var(--text-3); }
 
 @media (max-width: 1200px) {
-  .cards-grid { grid-template-columns: repeat(3, 1fr); }
-  .presence-card { grid-column: span 1; }
+  .cards-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 900px) {
   .stat-row { grid-template-columns: repeat(2, 1fr); }
