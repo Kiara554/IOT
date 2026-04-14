@@ -249,8 +249,6 @@ static bool isValidTrame(const String& s) {
 static bool mqttReconnect() {
   if (mqttClient.connected()) return true;
 
-  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
-
   Serial.printf("[MQTT] Connexion au broker %s:%d...\n", MQTT_BROKER, MQTT_PORT);
   // connect(clientId, user, pass, willTopic, willQoS, willRetain, willMessage, cleanSession=false)
   bool ok = mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD,
@@ -397,7 +395,8 @@ void setup() {
   display.drawString(0, 35, "En attente LoRa...");
   display.display();
 
-  // MQTT — connexion initiale
+  // MQTT — configuration du broker et connexion initiale
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttReconnect();
 
   // LoRa SX1262

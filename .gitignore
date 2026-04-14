@@ -32,6 +32,9 @@ code_recepteur/config.h
 smart-cesi-dashboard/.env
 upload code.txt
 
+# Script de configuration Mosquitto (contient des chemins absolus)
+configure-mosquitto.ps1
+
 
 # Livrables (Word, PDF)
 *.docx
