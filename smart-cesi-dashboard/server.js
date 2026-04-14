@@ -238,18 +238,6 @@ app.get('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });
 
-// ============================================================
-// FALLBACK HTTP — POST /api/data (sans auth token : l'auth se fait via Mosquitto)
-// ============================================================
-app.post('/api/data', (req, res) => {
-  const result = processIncomingData(req.body);
-  if (!result.ok) {
-    const status = result.error === 'payload manquant' ? 400 : 422;
-    return res.status(status).json({ error: result.error });
-  }
-  res.json({ ok: true, block_index: result.block_index });
-});
-
 // Fichiers statiques protégés par session
 app.use(requireAuth, express.static(path.join(__dirname, 'public')));
 
