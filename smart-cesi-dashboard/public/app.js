@@ -445,6 +445,7 @@ function refreshChain() {
     .then(r => r.json())
     .then(blocks => {
       chainCount.textContent = `${blocks.length} bloc${blocks.length > 1 ? 's' : ''}`;
+      if (chainBody.classList.contains('hidden')) return;
       const recent = blocks.slice(-20).reverse(); // 20 derniers, du plus récent au plus ancien
       chainRows.innerHTML = recent.map(b => {
         const hmacClass = b.hmac_valid === true  ? 'chain-hmac-ok'
